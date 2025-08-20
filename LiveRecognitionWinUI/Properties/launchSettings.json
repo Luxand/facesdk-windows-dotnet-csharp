@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LiveRecognitionWinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "LiveRecognitionWinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

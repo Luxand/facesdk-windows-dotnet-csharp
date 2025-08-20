@@ -1,0 +1,8 @@
+<ie>
+    <plugins>
+        <plugin name="GPU" location="openvino_intel_gpu_plugin.dll">
+        </plugin>
+        <plugin name="CPU" location="openvino_intel_cpu_plugin.dll">
+        </plugin>
+    </plugins>
+</ie>

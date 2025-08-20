@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <TargetFrameworks>netstandard2.0;net4.0</TargetFrameworks>
+    <Configurations>Debug;Release;Unity Debug;Unity Release;iOS Debug;iOS Release;Unity iOS Debug;Unity iOS Release</Configurations>
+    <LangVersion>8</LangVersion>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)Package</PackageOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="!$(Configuration.Contains(Unity)) and ('$(TargetFramework.StartsWith(netstandard))' or '$(TargetFramework)' == 'net4.0')">
+    <DefineConstants>USE_SYSTEM_DRAWING</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.Contains(iOS))">
+    <DefineConstants>IOS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.Contains(Debug))">
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.Contains(Release))">
+    <Optimize>True</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(TargetFramework.StartsWith(netstandard))">
+    <PackageReference Include="System.Drawing.Common" Version="4.7.2" />
+  </ItemGroup>
+
+  <Target Name="PrepackageScript" BeforeTargets="GenerateNuspec">
+    <RemoveDir Directories="$(PackageOutputPath)" />
+  </Target>
+
+</Project>
