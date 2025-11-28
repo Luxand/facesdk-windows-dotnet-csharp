@@ -355,6 +355,7 @@ namespace Luxand
         private static extern int ActivateLibraryInternal(string LicenseKey);
         public static int ActivateLibrary(string LicenseKey)
         {
+            SetParameter("environment", "dotnet");
             return ActivateLibraryInternal(LicenseKey);
         }
         
@@ -380,8 +381,8 @@ namespace Luxand
         
         [DllImport(Dll, EntryPoint = "FSDK_Initialize", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern int InitializeInternal(string DataFilesPath);
-        public static int InitializeLibrary(){
-            SetParameter("environment", ".NET");
+        public static int InitializeLibrary()
+        {
             return InitializeInternal("");
         }
 
