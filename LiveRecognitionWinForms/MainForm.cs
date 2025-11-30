@@ -149,7 +149,7 @@ namespace LiveRecognition
             }
 
             float matchThreshold = 0.1f;
-            FSDK.IDSimilarity[] id_similarity = tracker.MatchFaces(ref faceTemplate, matchThreshold);
+            FSDK.IDSimilarity[] id_similarity = tracker.MatchFaces(faceTemplate, matchThreshold);
             if (id_similarity == null || id_similarity.Length == 0)
             {
                 MessageBox.Show("No matches found", $"No faces found above threshold {matchThreshold}");

@@ -1044,15 +1044,15 @@ namespace Luxand
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_TrackerCreateID", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int FSDK_TrackerCreateIDInternal(int Tracker, [In, Out, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, out long ID, out long FaceID);
-        public static int TrackerCreateID(int Tracker, ref byte[] FaceTemplate, out long ID, out long FaceID)
+        private static extern int FSDK_TrackerCreateIDInternal(int Tracker, [In, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, out long ID, out long FaceID);
+        public static int TrackerCreateID(int Tracker, byte[] FaceTemplate, out long ID, out long FaceID)
         {
             return FSDK_TrackerCreateIDInternal(Tracker, FaceTemplate, out ID, out FaceID);
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_AddTrackerFaceTemplate", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int FSDK_AddTrackerFaceTemplateInternal(int Tracker, long ID, [In, Out, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, out long FaceID);
-        public static int AddTrackerFaceTemplate(int Tracker, long ID, ref byte[] FaceTemplate, out long FaceID)
+        private static extern int FSDK_AddTrackerFaceTemplateInternal(int Tracker, long ID, [In, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, out long FaceID);
+        public static int AddTrackerFaceTemplate(int Tracker, long ID, byte[] FaceTemplate, out long FaceID)
         {
             return FSDK_AddTrackerFaceTemplateInternal(Tracker, ID, FaceTemplate, out FaceID);
         }
@@ -1070,8 +1070,8 @@ namespace Luxand
         public static extern int DeleteTrackerFaceImage(int Tracker, long FaceID);
 
         [DllImport(Dll, EntryPoint = "FSDK_TrackerMatchFaces", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int FSDK_TrackerMatchFacesInternal(int Tracker, [In, Out, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, float Threshold, [Out, MarshalAs(UnmanagedType.LPArray)] IDSimilarity[] Buffer, out long Count, long MaxSizeInBytes);
-        public static int TrackerMatchFaces(int Tracker, ref byte[] FaceTemplate, float Threshold, out IDSimilarity[] Buffer, long MaxSizeInBytes)
+        public static extern int FSDK_TrackerMatchFacesInternal(int Tracker, [In, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, float Threshold, [Out, MarshalAs(UnmanagedType.LPArray)] IDSimilarity[] Buffer, out long Count, long MaxSizeInBytes);
+        public static int TrackerMatchFaces(int Tracker, byte[] FaceTemplate, float Threshold, out IDSimilarity[] Buffer, long MaxSizeInBytes)
         {
             Buffer = new IDSimilarity[MaxSizeInBytes / sizeof(IDSimilarity)];
             long Count = 0;
@@ -1178,14 +1178,16 @@ namespace Luxand
         
         [DllImport(Dll, EntryPoint = "FSDK_GetVideoFormatList", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern int FSDK_GetVideoFormatListInternal([In]byte[] CameraName, out void* VideoFormatList, out int VideoFormatCount);
-        public static int GetVideoFormatList(ref string CameraName, out VideoFormatInfo[] VideoFormatList, out int VideoFormatCount){
+        public static int GetVideoFormatList(string CameraName, out VideoFormatInfo[] VideoFormatList, out int VideoFormatCount){
             void * pVideoFormatList;
             int res = FSDK_GetVideoFormatListInternal(Helpers.EncodeString(CameraName), out pVideoFormatList, out VideoFormatCount);
             VideoFormatList = new VideoFormatInfo[VideoFormatCount];
+
             for (int i = 0; i < VideoFormatCount; ++i)
             {
                 VideoFormatList[i] = ((VideoFormatInfo*)pVideoFormatList)[i];
             }
+
             FreeVideoFormatList(pVideoFormatList);
             return res;
         }
@@ -1195,7 +1197,8 @@ namespace Luxand
             {
                 throw new ArgumentException("Camera name cannot be null or empty.", nameof(CameraName));
             }
-            GetVideoFormatList(ref CameraName, out var VideoFormatList, out var VideoFormatCount);
+
+            GetVideoFormatList(CameraName, out var VideoFormatList, out var VideoFormatCount);
             return VideoFormatList;
         }
 

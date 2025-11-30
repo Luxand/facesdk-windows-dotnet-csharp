@@ -312,9 +312,9 @@ namespace Luxand
         /// <summary>
         /// Creates a new ID from a face template.
         /// </summary>
-        public int CreateID(ref byte[] faceTemplate, out long id, out long faceId)
+        public int CreateID(byte[] faceTemplate, out long id, out long faceId)
         {
-            var res = FSDK.TrackerCreateID(handle, ref faceTemplate, out id, out faceId);
+            var res = FSDK.TrackerCreateID(handle, faceTemplate, out id, out faceId);
             FSDK.CheckForError(res);
             return res;
         }
@@ -322,9 +322,9 @@ namespace Luxand
         /// <summary>
         /// Adds a face template to an ID.
         /// </summary>
-        public int AddFaceTemplate(long id, ref byte[] faceTemplate, out long faceId)
+        public int AddFaceTemplate(long id, byte[] faceTemplate, out long faceId)
         {
-            var res = FSDK.AddTrackerFaceTemplate(handle, id, ref faceTemplate, out faceId);
+            var res = FSDK.AddTrackerFaceTemplate(handle, id, faceTemplate, out faceId);
             FSDK.CheckForError(res);
             return res;
         }
@@ -373,9 +373,9 @@ namespace Luxand
         /// <summary>
         /// Matches a face template against faces in the tracker.
         /// </summary>
-        public FSDK.IDSimilarity[] MatchFaces(ref byte[] faceTemplate, float threshold, long maxSizeInBytes = 1024)
+        public FSDK.IDSimilarity[] MatchFaces(byte[] faceTemplate, float threshold, long maxSizeInBytes = 1024)
         {
-            FSDK.CheckForError(FSDK.TrackerMatchFaces(handle, ref faceTemplate, threshold, out var buffer, maxSizeInBytes));
+            FSDK.CheckForError(FSDK.TrackerMatchFaces(handle, faceTemplate, threshold, out var buffer, maxSizeInBytes));
             return buffer;
         }
     }
