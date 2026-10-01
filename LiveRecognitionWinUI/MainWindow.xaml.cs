@@ -63,6 +63,8 @@ namespace LiveRecognitionWinUI
 
         // If the FaceSDK library is activated
         static bool isActivated = false;
+        // Prefix of the liveness caption: "iBeta Liveness" once the iBeta plugin is initialized, otherwise the built-in "Liveness"
+        string livenessLabel = "Liveness";
 
         // Person structure to hold name textblock and face ellipse
         public struct Person
@@ -80,6 +82,12 @@ namespace LiveRecognitionWinUI
 
         // Person list to hold detected faces
         public Dictionary<long, Person> persons = new Dictionary<long, Person>();
+
+        // Setting up brushes for different colors
+        SolidColorBrush green = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 255, 0));
+        SolidColorBrush blue = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 255));
+        SolidColorBrush red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 0, 0));
+        SolidColorBrush yellow = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 0));
 
         public MainWindow()
         {
@@ -116,7 +124,7 @@ namespace LiveRecognitionWinUI
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
             // Initialize camera or other resources here if needed
-            if (!isActivated && FSDK.FSDKE_OK != FSDK.ActivateLibrary("Insert the License Key here"))
+            if (!isActivated && FSDK.FSDKE_OK != FSDK.ActivateLibrary("INSERT THE LICENSE KEY HERE"))
             {
                 ShowErrorMessage("FaceSDK activation error.", "Error activating FaceSDK library. Check the license key.");
                 return;
@@ -178,13 +186,20 @@ namespace LiveRecognitionWinUI
             }
 
             // set realtime face detection parameters
-            tracker.SetParameter("DetectionVersion", "2");
-            tracker.SetMultipleParameters("FaceDetection2PatchSize=256; Threshold=0.8; Threshold2=0.9; SmoothAttributeLiveness=false; LivenessFramesCount=1; DetectLiveness=true", out var errorPosition);
+            tracker.SetMultipleParameters("FaceDetectionPatchSize=128; FaceDetectionThreshold=0.4;", out var errorPosition);
+
+            tracker.SetParameter("DetectLiveness", "true");
+            tracker.SetParameter("LivenessFramesCount", "1");
+            tracker.SetParameter("SmoothAttributeLiveness", "false");
 
             this.StartCameraBtn.IsEnabled = false;
 
             // Initialize iBeta liveness addon
-            if (FSDK.SetParameter("LivenessModel", "external:dataDir=" + AppContext.BaseDirectory) != FSDK.FSDKE_OK)
+            if (FSDK.SetParameter("LivenessModel", "external:dataDir=" + AppContext.BaseDirectory) == FSDK.FSDKE_OK)
+            {
+                livenessLabel = "iBeta Liveness";
+            }
+            else
             {
                 ShowErrorMessage("IBeta Liveness error", "Error initializing IBeta Liveness plugin");
             }
@@ -220,9 +235,14 @@ namespace LiveRecognitionWinUI
                 imageBuffer[i + 2] = temp;
             }
 
+            int frameWidth = frame.Width;
+            int frameHeight = frame.Height;
+
+            if (this.DispatcherQueue == null) { return; }
+
             this.DispatcherQueue.TryEnqueue(() =>
             {
-                WriteableBitmap bitmap = new WriteableBitmap(frame.Width, frame.Height);
+                WriteableBitmap bitmap = new WriteableBitmap(frameWidth, frameHeight);
                 bitmap.PixelBuffer.AsStream().Write(imageBuffer);
                 this.CameraImage.Source = bitmap;
             });
@@ -241,8 +261,19 @@ namespace LiveRecognitionWinUI
             // Process the frame with the tracker
             tracker.FeedFrame(frame, out long[] faceIds);
 
+            if (this.DispatcherQueue == null) { return; }
+
+            // Getting video and image dimensions
+            double videoWidth = frame.Width;
+            double videoHeight = frame.Height;
+
+            frame.Dispose();
+            GC.Collect();
+
             this.DispatcherQueue.TryEnqueue(() =>
             {
+                if (isClosed) return;
+
                 // Remove faces that are no longer detected
                 foreach (var p in persons)
                 {
@@ -256,9 +287,6 @@ namespace LiveRecognitionWinUI
 
                 if (faceIds == null || tracker == null) { return; }
 
-                // Getting video and image dimensions
-                double videoWidth = frame.Width;
-                double videoHeight = frame.Height;
                 double imageWidth = this.CameraImage.ActualWidth;
                 double imageHeight = this.CameraImage.ActualHeight;
 
@@ -271,15 +299,9 @@ namespace LiveRecognitionWinUI
                 this.canvas.Width = imageWidth;
                 this.canvas.Height = imageHeight;
 
-                // Setting up brushes for different colors
-                var green = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 255, 0));
-                var blue = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 255));
-                var red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 0, 0));
-                var yellow = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 0));
-
                 foreach (var faceId in faceIds)
                 {
-                    // Get the face position and create an ellipse for it
+                    // Get the face and create an ellipse for it
                     FSDK.TFace face;
                     try { face = tracker.GetFace(0, faceId); } catch { continue; }
 
@@ -287,14 +309,13 @@ namespace LiveRecognitionWinUI
                     string facename = "";
                     try { facename = tracker.GetName(faceId); } catch { }
 
-                    var center = face.center();
-
                     // Get liveness
                     float liveness = 0.0f;
                     string livenessError = "";
                     string livenessText = "";
 
-                    try {
+                    try
+                    {
                         tracker.GetFacialAttribute(faceId, "Liveness", out string livenessAttribute);
                         if (livenessAttribute != null && livenessAttribute != "")
                         {
@@ -303,22 +324,13 @@ namespace LiveRecognitionWinUI
                         tracker.GetFacialAttribute(faceId, "LivenessError", out string livenessErrorString);
                         livenessError = livenessErrorString.Substring("LivenessError=".Length);
                         livenessError = livenessError.Remove(livenessError.Length - 2);
-                    } catch { }
-
-                    // Check if the face is already tracked, update its position if it is
-                    Person person = new();
-                    if (persons.ContainsKey(faceId))
-                    {
-                        person = persons[faceId];
                     }
+                    catch { };
 
-                    Ellipse? ellipse = person.ellipse;
-                    TextBlock? nameTextBlock = person.nameTextBlock;
-
-                    double w = face.width();
-                    double h = face.height();
-                    double left = center.x - w / 2.0;
-                    double top = center.y - h / 2.0;
+                    double w = face.width;
+                    double h = face.height;
+                    double left = face.left;
+                    double top = face.top;
 
                     // Converting coordinates and sizes to Canvas coordinates
                     double scaledLeft = left * scale + offsetX;
@@ -332,7 +344,7 @@ namespace LiveRecognitionWinUI
                     if (livenessError != "")
                     {
                         color = yellow;
-                        livenessText = $"Liveness: {livenessError}";
+                        livenessText = $"{livenessLabel}: {livenessError}";
                     }
                     else
                     {
@@ -344,7 +356,7 @@ namespace LiveRecognitionWinUI
                             }
                             else
                             {
-                                livenessText = $"Liveness: {liveness * 100.0f:0.00}%";
+                                livenessText = $"{livenessLabel}: {liveness * 100.0f:0.00}%";
                             }
                         }
                     }
@@ -368,7 +380,16 @@ namespace LiveRecognitionWinUI
                         }
                     }
 
-                    if (person.faceId == -1)
+                    Ellipse? ellipse = null;
+                    TextBlock? nameTextBlock = null;
+
+                    //Check if the face is already tracked, update its position
+                    if (persons.ContainsKey(faceId))
+                    {
+                        ellipse = persons[faceId].ellipse;
+                        nameTextBlock = persons[faceId].nameTextBlock;
+                    }
+                    else
                     {
                         ellipse = new Ellipse
                         {
@@ -389,6 +410,7 @@ namespace LiveRecognitionWinUI
                             HorizontalAlignment = HorizontalAlignment.Center,
                             VerticalAlignment = VerticalAlignment.Top
                         };
+
                         persons[faceId] = new Person
                         {
                             faceId = (int)faceId,
@@ -441,6 +463,11 @@ namespace LiveRecognitionWinUI
 
             while (!isClosed)
             {
+                if (worker != null && worker.CancellationPending)
+                {
+                    e.Cancel = true;
+                    break;
+                }
                 ProcessPersonsAndDrawFrame();
             }
         }
@@ -571,8 +598,8 @@ namespace LiveRecognitionWinUI
                 return;
             }
 
-            FSDK.TFace face = image.DetectFace2();
-            if (face.empty())
+            FSDK.TFace face = image.DetectFace();
+            if (face.empty)
             {
                 // No faces found in the image
                 ShowErrorMessage("No faces found", "The image does not contain any detectable faces.");
@@ -582,7 +609,7 @@ namespace LiveRecognitionWinUI
             byte[] faceTemplate = new byte[FSDK.TemplateSize];
             try
             {
-                faceTemplate = image.GetFaceTemplateInRegion2(face);
+                faceTemplate = image.GetFaceTemplateInRegion(face);
             }
             catch (Exception ex)
             {

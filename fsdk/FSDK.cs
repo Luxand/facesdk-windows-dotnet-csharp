@@ -23,17 +23,9 @@ namespace Luxand
         /// </summary>
         public const int TemplateSize = 1040;
         /// <summary>
-        /// Size of the face template (version 2).
-        /// </summary>
-        public const int TemplateSize2 = 2068;
-        /// <summary>
-        /// Size of the TFacePosition struct in bytes.
-        /// </summary>
-        public const int sizeofTFacePosition = 24;
-        /// <summary>
         /// Size of the TFace struct in bytes.
         /// </summary>
-        public const int sizeofTFace = 56;
+        public const int sizeofTFace = 64;
 
         // Error codes
         /// <summary>Success.</summary>
@@ -114,6 +106,11 @@ namespace Luxand
         public const int FSDK_FACIAL_FEATURE_COUNT = 70;
 
         /// <summary>
+        /// The number of key points carried by a detected face (see <see cref="TFace"/>).
+        /// </summary>
+        public const int FSDK_FACE_FEATURE_COUNT = 5;
+
+        /// <summary>
         /// Specifies the supported image pixel formats for FaceSDK image operations.
         /// </summary>
         public enum FSDK_IMAGEMODE
@@ -133,29 +130,51 @@ namespace Luxand
         };
 
         /// <summary>
-        /// Represents a point (x, y) in image coordinates.
+        /// Represents a point (x, y) in whole-pixel image coordinates.
+        /// Used by the bounding box and the five key points of a <see cref="TFace"/>.
         /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
         public struct TPoint
         {
             public int x, y;
         }
 
         /// <summary>
-        /// Represents the position and rotation of a detected face in the image.
+        /// Represents a point (x, y) in sub-pixel image coordinates.
+        /// Used by the 70 facial features, which FaceSDK 9.0 reports as floating point.
         /// </summary>
-        public struct TFacePosition
+        [StructLayout(LayoutKind.Sequential)]
+        public struct TPointF
         {
-            public int xc, yc, w;
-            public int padding;
-            public double angle;
+            public float x, y;
+
+            /// <summary>
+            /// Rounds this point to the nearest whole pixel.
+            /// </summary>
+            public TPoint ToTPoint() => new TPoint
+            {
+                x = (int)Math.Round(x),
+                y = (int)Math.Round(y)
+            };
         }
 
         /// <summary>
-        /// Represents a detected face, including bounding box and facial features.
+        /// A detected face: its detection score, in-plane rotation angle, bounding box and five key points.
+        /// Replaces the <c>TFacePosition</c> structure used by FaceSDK 8.x and earlier.
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct TFace
         {
+            /// <summary>
+            /// Detection confidence of the face, in the range 0..1.
+            /// </summary>
+            public float score;
+
+            /// <summary>
+            /// In-plane rotation angle of the face, in degrees.
+            /// </summary>
+            public float angle;
+
             /// <summary>
             /// Bounding box of the face.
             /// </summary>
@@ -173,74 +192,52 @@ namespace Luxand
             /// <summary>
             /// Array of facial feature points (typically 5 points).
             /// </summary>
-            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)]
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = FSDK_FACE_FEATURE_COUNT)]
             public TPoint[] features;
-            
+
             /// <summary>
             /// The center of the face
             /// </summary>
-            public TPoint center()
+            public readonly TPoint center => new TPoint
             {
-                return new TPoint
-                {
-                    x = (bbox.p0.x + bbox.p1.x) / 2,
-                    y = (bbox.p0.y + bbox.p1.y) / 2
-                };
-            }
+                x = (bbox.p0.x + bbox.p1.x) / 2,
+                y = (bbox.p0.y + bbox.p1.y) / 2
+            };
 
             /// <summary>
             /// Face width
             /// </summary>
-            public int width()
-            {
-                return bbox.p1.x - bbox.p0.x;
-            }
+            public readonly int width => bbox.p1.x - bbox.p0.x;
+
             /// <summary>
             /// Face height
             /// </summary>
-            public int height()
-            {
-                return bbox.p1.y - bbox.p0.y;
-            }
+            public readonly int height => bbox.p1.y - bbox.p0.y;
 
             /// <summary>
             /// Left edge of the face bounding box.
             /// </summary>
-            public int left()
-            {
-                return bbox.p0.x;
-            }
+            public readonly int left => bbox.p0.x;
 
             /// <summary>
             /// Right edge of the face bounding box.
             /// </summary>
-            public int right()
-            {
-                return bbox.p1.x;
-            }
+            public readonly int right => bbox.p1.x;
+
             /// <summary>
             /// Top edge of the face bounding box.
             /// </summary>
-            public int top()
-            {
-                return bbox.p0.y;
-            }
+            public readonly int top => bbox.p0.y;
 
             /// <summary>
             /// Bottom edge of the face bounding box.
             /// </summary>
-            public int bottom()
-            {
-                return bbox.p1.y;
-            }
+            public readonly int bottom => bbox.p1.y;
 
             /// <summary>
             /// Check if the face bounding box is empty (either width or height is zero).
             /// </summary>
-            public bool empty()
-            {
-                return height() == 0 || width() == 0;
-            }
+            public readonly bool empty => height == 0 || width == 0;
         }
 
         /// <summary>
@@ -418,113 +415,64 @@ namespace Luxand
         //}
 
         //FACE DETECTION FUNCTIONS{
-        [DllImport(Dll, EntryPoint = "FSDK_DetectEyes", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectEyesInternal(int Image, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures);
-        public static int DetectEyes(int Image, out TPoint[] FacialFeatures)
-        {
-            FacialFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
-            return DetectEyesInternal(Image, FacialFeatures);
-        }
-        
-        [DllImport(Dll, EntryPoint = "FSDK_DetectEyesInRegion", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectEyesInRegionInternal(int Image, in TFacePosition FacePosition, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures);
-        public static int DetectEyesInRegion(int Image, in TFacePosition FacePosition, out TPoint[] FacialFeatures){
-            FacialFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
-            return DetectEyesInRegionInternal(Image, FacePosition, FacialFeatures);
-        }
-        
         [DllImport(Dll, EntryPoint = "FSDK_DetectFace", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectFaceInternal(int Image, out TFacePosition FacePosition);
-        public static int DetectFace(int Image, out TFacePosition facePosition)
+        private static extern int DetectFaceInternal(int Image, out TFace Face);
+        public static int DetectFace(int Image, out TFace Face)
         {
-            return DetectFaceInternal(Image, out facePosition);
-        }
-
-        [DllImport(Dll, EntryPoint = "FSDK_DetectFace2", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectFace2Internal(int Image, out TFace FacePosition);
-        public static int DetectFace2(int Image, out TFace FacePosition)
-        {
-            return DetectFace2Internal(Image, out FacePosition);
+            return DetectFaceInternal(Image, out Face);
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_DetectMultipleFaces", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectMultipleFacesInternal(int Image, out int DetectedCount, [Out, MarshalAs(UnmanagedType.LPArray)] TFacePosition[] FaceArray, int MaxSizeInBytes);
-        public static int DetectMultipleFaces(int Image, out TFacePosition[] FaceArray, int MaxSizeInBytes)
+        private static extern int DetectMultipleFacesInternal(int Image, out int DetectedCount, [Out, MarshalAs(UnmanagedType.LPArray)] TFace[] FaceArray, int MaxCount);
+        /// <summary>
+        /// Detects multiple faces in an image, sorted by detection score in descending order.
+        /// </summary>
+        /// <param name="Image">Handle of the image to search.</param>
+        /// <param name="FaceArray">Receives the detected faces. Its length is the number of faces found.</param>
+        /// <param name="MaxCount">Maximum number of faces to return. Note that FaceSDK 9.0 counts faces here, while earlier versions took a buffer size in bytes.</param>
+        public static int DetectMultipleFaces(int Image, out TFace[] FaceArray, int MaxCount = 256)
         {
-            var faceArray = new TFacePosition[MaxSizeInBytes / Marshal.SizeOf(typeof(TFacePosition))];
-            var res = DetectMultipleFacesInternal(Image, out var DetectedCount, faceArray, MaxSizeInBytes);
+            if (MaxCount < 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxCount));
+
+            var faceArray = new TFace[MaxCount];
+            var res = DetectMultipleFacesInternal(Image, out var DetectedCount, faceArray, MaxCount);
 
             if (res != FSDKE_OK)
             {
-                FaceArray = new TFacePosition[0];
+                FaceArray = new TFace[0];
                 return res;
             }
 
-            FaceArray = new TFacePosition[DetectedCount];
+            if (DetectedCount > MaxCount)
+                DetectedCount = MaxCount;
+
+            FaceArray = new TFace[DetectedCount];
             Array.Copy(faceArray, FaceArray, DetectedCount);
             return res;
         }
 
-        public static int DetectMultipleFaces(int Image, out int DetectedCount, out TFacePosition[] FaceArray, int MaxSizeInBytes)
+        public static int DetectMultipleFaces(int Image, out int DetectedCount, out TFace[] FaceArray, int MaxCount = 256)
         {
-            var res = DetectMultipleFaces(Image, out FaceArray, MaxSizeInBytes);
+            var res = DetectMultipleFaces(Image, out FaceArray, MaxCount);
             DetectedCount = FaceArray.Length;
             return res;
         }
 
-        [DllImport(Dll, EntryPoint = "FSDK_DetectMultipleFaces2", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectMultipleFaces2Internal(int Image, out int DetectedCount, [Out, MarshalAs(UnmanagedType.LPArray)] TFace[] FaceArray, int MaxSizeInBytes);
-        public static int DetectMultipleFaces2(int Image, out TFace[] Faces, int MaxSize)
-        {
-            var faces = new TFace[MaxSize];
-            var result = DetectMultipleFaces2Internal(Image, out var detectedCount, faces, MaxSize * Marshal.SizeOf(typeof(TFace)));
-
-            if (result != FSDKE_OK)
-            {
-                Faces = new TFace[0];
-                return result;
-            }
-
-            Faces = new TFace[detectedCount];
-            Array.Copy(faces, Faces, detectedCount);
-            return result;
-        }
-
-        public static int DetectMultipleFaces2(int Image, out int DetectedCount, out TFace[] Faces, int MaxSize)
-        {
-            var result = DetectMultipleFaces2(Image, out Faces, MaxSize);
-            DetectedCount = Faces.Length;
-            return result;
-        }
-
         [DllImport(Dll, EntryPoint = "FSDK_DetectFacialFeatures", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectFacialFeaturesInternal(int Image, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures);
-        public static int DetectFacialFeatures(int Image, out TPoint[] FacialFeatures)
+        private static extern int DetectFacialFeaturesInternal(int Image, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPointF[] FacialFeatures);
+        public static int DetectFacialFeatures(int Image, out TPointF[] FacialFeatures)
         {
-            FacialFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
+            FacialFeatures = new TPointF[FSDK_FACIAL_FEATURE_COUNT];
             return DetectFacialFeaturesInternal(Image, FacialFeatures);
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_DetectFacialFeaturesInRegion", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectFacialFeaturesInRegionInternal(int Image, in TFacePosition FacePosition, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures);
-        public static int DetectFacialFeaturesInRegion(int Image, in TFacePosition FacePosition, out TPoint[] FacialFeatures)
+        private static extern int DetectFacialFeaturesInRegionInternal(int Image, in TFace Face, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPointF[] FacialFeatures);
+        public static int DetectFacialFeaturesInRegion(int Image, in TFace Face, out TPointF[] FacialFeatures)
         {
-            FacialFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
-            return DetectFacialFeaturesInRegionInternal(Image, FacePosition, FacialFeatures);
-        }
-
-        [DllImport(Dll, EntryPoint = "FSDK_SetFaceDetectionParameters", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int SetFaceDetectionParametersInternal(bool HandleArbitraryRotations, bool DetermineFaceRotationAngle, int InternalResizeWidth);
-        public static int SetFaceDetectionParameters(bool HandleArbitraryRotations, bool DetermineFaceRotationAngle, int InternalResizeWidth)
-        {
-            return SetFaceDetectionParametersInternal(HandleArbitraryRotations, DetermineFaceRotationAngle, InternalResizeWidth);
-        }
-
-        [DllImport(Dll, EntryPoint = "FSDK_SetFaceDetectionThreshold", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int SetFaceDetectionThresholdInternal(int Threshold);
-        private static int SetFaceDetectionThreshold(int Threshold)
-        {
-            return SetFaceDetectionThresholdInternal(Threshold);
+            FacialFeatures = new TPointF[FSDK_FACIAL_FEATURE_COUNT];
+            return DetectFacialFeaturesInRegionInternal(Image, Face, FacialFeatures);
         }
         //}
 
@@ -573,9 +521,68 @@ namespace Luxand
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_LoadImageFromFileW", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int LoadImageFromFileWInternal(out int Image, [In, MarshalAs(UnmanagedType.BStr)] string FileName);
+        private static extern int LoadImageFromFileWInternal(out int Image, [In, MarshalAs(UnmanagedType.LPWStr)] string FileName);
         public static int LoadImageFromFileW(out int Image, string FileName) {
-            return LoadImageFromFileWInternal(out Image, FileName); 
+            return LoadImageFromFileWInternal(out Image, FileName);
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_LoadImageFromFileWithAlpha", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int LoadImageFromFileWithAlphaInternal(out int Image, string FileName);
+        /// <summary>
+        /// Loads an image from a file, preserving its alpha channel. The image is loaded in 32-bit color mode.
+        /// </summary>
+        public static int LoadImageFromFileWithAlpha(out int Image, string FileName)
+        {
+            return LoadImageFromFileWithAlphaInternal(out Image, FileName);
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_LoadImageFromFileWithAlphaW", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int LoadImageFromFileWithAlphaWInternal(out int Image, [In, MarshalAs(UnmanagedType.LPWStr)] string FileName);
+        /// <summary>
+        /// Loads an image from a file whose name contains Unicode characters, preserving its alpha channel.
+        /// </summary>
+        public static int LoadImageFromFileWithAlphaW(out int Image, string FileName)
+        {
+            return LoadImageFromFileWithAlphaWInternal(out Image, FileName);
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_LoadImageFromJpegBuffer", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int LoadImageFromJpegBufferInternal(out int Image, [In] byte[] Buffer, uint BufferLength);
+        /// <summary>
+        /// Loads an image from a buffer holding an encoded JPEG file.
+        /// </summary>
+        public static int LoadImageFromJpegBuffer(out int Image, byte[] Buffer)
+        {
+            if (Buffer == null)
+                throw new ArgumentNullException(nameof(Buffer));
+
+            return LoadImageFromJpegBufferInternal(out Image, Buffer, (uint)Buffer.Length);
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_LoadImageFromPngBuffer", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int LoadImageFromPngBufferInternal(out int Image, [In] byte[] Buffer, uint BufferLength);
+        /// <summary>
+        /// Loads an image from a buffer holding an encoded PNG file, discarding its alpha channel.
+        /// </summary>
+        public static int LoadImageFromPngBuffer(out int Image, byte[] Buffer)
+        {
+            if (Buffer == null)
+                throw new ArgumentNullException(nameof(Buffer));
+
+            return LoadImageFromPngBufferInternal(out Image, Buffer, (uint)Buffer.Length);
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_LoadImageFromPngBufferWithAlpha", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int LoadImageFromPngBufferWithAlphaInternal(out int Image, [In] byte[] Buffer, uint BufferLength);
+        /// <summary>
+        /// Loads an image from a buffer holding an encoded PNG file, preserving its alpha channel.
+        /// </summary>
+        public static int LoadImageFromPngBufferWithAlpha(out int Image, byte[] Buffer)
+        {
+            if (Buffer == null)
+                throw new ArgumentNullException(nameof(Buffer));
+
+            return LoadImageFromPngBufferWithAlphaInternal(out Image, Buffer, (uint)Buffer.Length);
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_FreeImage", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
@@ -593,7 +600,7 @@ namespace Luxand
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_SaveImageToFileW", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int SaveImageToFileWInternal(int Image, [In, MarshalAs(UnmanagedType.BStr)] string FileName);
+        private static extern int SaveImageToFileWInternal(int Image, [In, MarshalAs(UnmanagedType.LPWStr)] string FileName);
         public static int SaveImageToFileW(int Image, string FileName)
         {
             return SaveImageToFileWInternal(Image, FileName);
@@ -613,10 +620,11 @@ namespace Luxand
             return SaveImageToHBitmapInternal(Image, out BitmapHandle);
         }
 
+#if USE_SYSTEM_DRAWING
+
         [DllImport("gdi32.dll")]
         static extern bool DeleteObject(IntPtr hObject);
 
-#if USE_SYSTEM_DRAWING
         /// <summary>
         /// Loads an image from a System.Drawing.Image object into the FaceSDK image format.
         /// </summary>
@@ -670,7 +678,7 @@ namespace Luxand
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_MirrorImage", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int MirrorImageInternal(int Image, bool UseVerticalMirroringInsteadOfHorizontal);
+        private static extern int MirrorImageInternal(int Image, [MarshalAs(UnmanagedType.U1)] bool UseVerticalMirroringInsteadOfHorizontal);
         public static int MirrorImage(int Image, bool UseVerticalMirroringInsteadOfHorizontal)
         {
             return MirrorImageInternal(Image, UseVerticalMirroringInsteadOfHorizontal);
@@ -725,10 +733,23 @@ namespace Luxand
             return GetImageHeightInternal(SourceImage, out Height);
         }
 
+        [DllImport(Dll, EntryPoint = "FSDK_GetImageData", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int GetImageDataInternal(int Image, out byte* Data, out int Width, out int Height, out int ScanLine, out FSDK_IMAGEMODE ColorMode);
+        /// <summary>
+        /// Returns a pointer to the pixel data owned by the image, together with its geometry and pixel format.
+        /// The buffer belongs to the image and stays valid only until the image is modified or freed.
+        /// </summary>
+        public static int GetImageData(int Image, out IntPtr Data, out int Width, out int Height, out int ScanLine, out FSDK_IMAGEMODE ColorMode)
+        {
+            int res = GetImageDataInternal(Image, out var data, out Width, out Height, out ScanLine, out ColorMode);
+            Data = (IntPtr)data;
+            return res;
+        }
+
         [DllImport(Dll, EntryPoint = "FSDK_ExtractFaceImage", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int ExtractFaceImageInternal(int Image, [In, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures, int Width, int Height, out int ExtractedFaceImage, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] ResizedFeatures);
-        public static int ExtractFaceImage(int Image, TPoint[] FacialFeatures, int Width, int Height, out int ExtractedFaceImage, out TPoint[] ResizedFeatures){
-            ResizedFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
+        private static extern int ExtractFaceImageInternal(int Image, [In, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPointF[] FacialFeatures, int Width, int Height, out int ExtractedFaceImage, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPointF[] ResizedFeatures);
+        public static int ExtractFaceImage(int Image, TPointF[] FacialFeatures, int Width, int Height, out int ExtractedFaceImage, out TPointF[] ResizedFeatures){
+            ResizedFeatures = new TPointF[FSDK_FACIAL_FEATURE_COUNT];
             return ExtractFaceImageInternal(Image, FacialFeatures, Width, Height, out ExtractedFaceImage, ResizedFeatures);
         }
         //}
@@ -743,62 +764,17 @@ namespace Luxand
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_GetFaceTemplateInRegion", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetFaceTemplateInRegionInteral(int Image, in TFacePosition FacePosition, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = TemplateSize)] byte[] FaceTemplate);
-        public static int GetFaceTemplateInRegion(int Image, TFacePosition FacePosition, out byte[] FaceTemplate)
+        private static extern int GetFaceTemplateInRegionInteral(int Image, in TFace Face, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = TemplateSize)] byte[] FaceTemplate);
+        public static int GetFaceTemplateInRegion(int Image, in TFace Face, out byte[] FaceTemplate)
         {
             FaceTemplate = new byte[TemplateSize];
-            return GetFaceTemplateInRegionInteral(Image, FacePosition, FaceTemplate);
+            return GetFaceTemplateInRegionInteral(Image, Face, FaceTemplate);
         }
 
-        [DllImport(Dll, EntryPoint = "FSDK_GetFaceTemplate2", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetFaceTemplate2Internal(int Image, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = TemplateSize2)] byte[] FaceTemplate);
-
-        public static int GetFaceTemplate2(int Image, out byte[] FaceTemplate)
-        {
-            FaceTemplate = new byte[TemplateSize2];
-            return GetFaceTemplate2Internal(Image, FaceTemplate);
-        }
-
-        [DllImport(Dll, EntryPoint = "FSDK_GetFaceTemplateInRegion2", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetFaceTemplateInRegion2Internal(int Image, in TFace Face, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = TemplateSize2)] byte[] FaceTemplate);
-        public static int GetFaceTemplateInRegion2(int Image, TFace Face, out byte[] FaceTemplate)
-        {
-            FaceTemplate = new byte[TemplateSize2];
-            return GetFaceTemplateInRegion2Internal(Image, Face, FaceTemplate);
-        }
-
-        [DllImport(Dll, EntryPoint = "FSDK_GetFaceTemplateUsingEyes", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetFaceTemplateUsingEyesInternal(int Image, [In, MarshalAs(UnmanagedType.LPArray)] TPoint[] eyeCoords, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = TemplateSize)] byte[] FaceTemplate);
-        public static int GetFaceTemplateUsingEyes(int Image, TPoint[] eyeCoords, out byte[] FaceTemplate){
-            FaceTemplate = new byte[TemplateSize];
-            return GetFaceTemplateUsingEyesInternal(Image, eyeCoords, FaceTemplate);
-        }
-        
-        [DllImport(Dll, EntryPoint = "FSDK_GetFaceTemplateUsingFeatures", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetFaceTemplateUsingFeaturesInternal(int Image, [In, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = TemplateSize)] byte[] FaceTemplate);
-        public static int GetFaceTemplateUsingFeatures(int Image, TPoint[] FacialFeatures, out byte[] FaceTemplate){
-            FaceTemplate = new byte[TemplateSize];
-            return GetFaceTemplateUsingFeaturesInternal(Image, FacialFeatures, FaceTemplate);
-        }
-        
         [DllImport(Dll, EntryPoint = "FSDK_MatchFaces", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern int MatchFacesInternal([In, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate1, [In, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate2, out float Similarity);
         public static int MatchFaces(byte[] FaceTemplate1, byte[] FaceTemplate2, out float Similarity){
             return MatchFacesInternal(FaceTemplate1, FaceTemplate2, out Similarity);
-        }
-        
-        [DllImport(Dll, EntryPoint = "FSDK_GetMatchingThresholdAtFAR", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetMatchingThresholdAtFARInternal(float FARValue, out float Threshold);
-        public static int GetMatchingThresholdAtFAR(float FARValue, out float Threshold)
-        {
-            return GetMatchingThresholdAtFARInternal(FARValue, out Threshold);
-        }
-
-        [DllImport(Dll, EntryPoint = "FSDK_GetMatchingThresholdAtFRR", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int GetMatchingThresholdAtFRRInternal(float FRRValue, out float Threshold);
-        public static int GetMatchingThresholdAtFRR(float FRRValue, out float Threshold)
-        {
-            return GetMatchingThresholdAtFRRInternal(FRRValue, out Threshold);      
         }
         //}
 
@@ -856,31 +832,20 @@ namespace Luxand
             return FeedFrameInternal(Tracker, CameraIdx, Image, out FaceCount, IDs, MaxSizeInBytes);
         }
 
-        [DllImport(Dll, EntryPoint = "FSDK_GetTrackerEyes", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetTrackerEyesInternal(int Tracker, long CameraIdx, long ID, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures);
-        public static int GetTrackerEyes(int Tracker, long CameraIdx, long ID, out TPoint[] FacialFeatures)
-        {
-            FacialFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
-            return GetTrackerEyesInternal(Tracker, CameraIdx, ID, FacialFeatures);
-        }
 
         [DllImport(Dll, EntryPoint = "FSDK_GetTrackerFacialFeatures", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetTrackerFacialFeaturesInternal(int Tracker, long CameraIdx, long ID, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures);
-        public static int GetTrackerFacialFeatures(int Tracker, long CameraIdx, long ID, out TPoint[] FacialFeatures)
+        private static extern int GetTrackerFacialFeaturesInternal(int Tracker, long CameraIdx, long ID, [Out, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPointF[] FacialFeatures);
+        public static int GetTrackerFacialFeatures(int Tracker, long CameraIdx, long ID, out TPointF[] FacialFeatures)
         {
-            FacialFeatures = new TPoint[FSDK_FACIAL_FEATURE_COUNT];
+            FacialFeatures = new TPointF[FSDK_FACIAL_FEATURE_COUNT];
             return GetTrackerFacialFeaturesInternal(Tracker, CameraIdx, ID, FacialFeatures);
         }
         
-        [DllImport(Dll, EntryPoint = "FSDK_GetTrackerFacePosition", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetTrackerFacePositionInternal(int Tracker, long CameraIdx, long ID, out TFacePosition FacePosition);
-        public static int GetTrackerFacePosition(int Tracker, long CameraIdx, long ID, out TFacePosition FacePosition)
-        {
-            return GetTrackerFacePositionInternal(Tracker, CameraIdx, ID, out FacePosition);
-        }
-
         [DllImport(Dll, EntryPoint = "FSDK_GetTrackerFace", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetTrackerFaceInternal(int Tracker, long CameraIdx, long ID, out TFace FacePosition);
+        private static extern int GetTrackerFaceInternal(int Tracker, long CameraIdx, long ID, out TFace Face);
+        /// <summary>
+        /// Returns the position of a tracked face. Replaces <c>FSDK_GetTrackerFacePosition</c>, which FaceSDK 9.0 removed.
+        /// </summary>
         public static int GetTrackerFace(int Tracker, long CameraIdx, long ID, out TFace Face)
         {
             return GetTrackerFaceInternal(Tracker, CameraIdx, ID, out Face);
@@ -1081,11 +1046,25 @@ namespace Luxand
         }
 
         [DllImport(Dll, EntryPoint = "FSDK_DetectFacialAttributeUsingFeatures", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int DetectFacialAttributeUsingFeaturesInternal(int Image, [In, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPoint[] FacialFeatures, string AttributeName, [Out] StringBuilder AttributeValues, long MaxSizeInBytes);
-        public static int DetectFacialAttributeUsingFeatures(int Image, TPoint[] FacialFeatures, string AttributeName, out string AttributeValues, long MaxSizeInBytes)
+        private static extern int DetectFacialAttributeUsingFeaturesInternal(int Image, [In, MarshalAs(UnmanagedType.LPArray, SizeConst = FSDK_FACIAL_FEATURE_COUNT)] TPointF[] FacialFeatures, string AttributeName, [Out] StringBuilder AttributeValues, long MaxSizeInBytes);
+        public static int DetectFacialAttributeUsingFeatures(int Image, TPointF[] FacialFeatures, string AttributeName, out string AttributeValues, long MaxSizeInBytes)
         {
             StringBuilder tmps = new StringBuilder((int)MaxSizeInBytes);
             int res = DetectFacialAttributeUsingFeaturesInternal(Image, FacialFeatures, AttributeName, tmps, MaxSizeInBytes);
+            AttributeValues = tmps.ToString();
+            return res;
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_DetectFacialAttributeUsingFace", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int DetectFacialAttributeUsingFaceInternal(int Image, in TFace Face, string AttributeName, [Out] StringBuilder AttributeValues, long MaxSizeInBytes);
+        /// <summary>
+        /// Detects a facial attribute for a face returned by <see cref="DetectFace"/> or <see cref="DetectMultipleFaces(int, out TFace[], int)"/>,
+        /// without having to detect the 70 facial features first.
+        /// </summary>
+        public static int DetectFacialAttributeUsingFace(int Image, in TFace Face, string AttributeName, out string AttributeValues, long MaxSizeInBytes = 1024)
+        {
+            StringBuilder tmps = new StringBuilder((int)MaxSizeInBytes);
+            int res = DetectFacialAttributeUsingFaceInternal(Image, Face, AttributeName, tmps, MaxSizeInBytes);
             AttributeValues = tmps.ToString();
             return res;
         }
@@ -1134,7 +1113,7 @@ namespace Luxand
         /// <param name="UseDevicePathAsName">If true, use device path as camera name; otherwise, use default name.</param>
         /// <returns>FSDKE_OK on success or an error code on failure.</returns>
         [DllImport(Dll, EntryPoint = "FSDK_SetCameraNaming", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int SetCameraNaming(bool UseDevicePathAsName);
+        public static extern int SetCameraNaming([MarshalAs(UnmanagedType.U1)] bool UseDevicePathAsName);
 
         /// <summary>
         /// Frees a camera list previously allocated by the SDK.
@@ -1237,5 +1216,25 @@ namespace Luxand
         [DllImport(Dll, EntryPoint = "FSDK_GrabFrame", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GrabFrameInternal(int cameraHandle, out int imageHandle);
         public static int GrabFrame(int cameraHandle, out int imageHandle) => GrabFrameInternal(cameraHandle, out imageHandle);
+
+        [DllImport(Dll, EntryPoint = "FSDK_GetVersionInfo", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+        private static extern int GetVersionInfoInternal(out IntPtr versionInfo);
+        public static int GetVersionInfo(out string versionInfo)
+        {
+            IntPtr nativePtr = IntPtr.Zero;
+            int rc = GetVersionInfoInternal(out nativePtr);
+
+            versionInfo = (nativePtr == IntPtr.Zero)
+                ? string.Empty
+                : Marshal.PtrToStringAnsi(nativePtr);
+
+            return rc;
+        }
+
+        public static string GetVersionInfo()
+        {
+            FSDK.CheckForError(GetVersionInfo(out var versionInfo));
+            return versionInfo;
+        }
     }
 }

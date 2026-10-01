@@ -1,9 +1,6 @@
 {
   "profiles": {
-    "LiveRecognitionWinUI (Package)": {
-      "commandName": "MsixPackage"
-    },
-    "LiveRecognitionWinUI (Unpackaged)": {
+    "LiveRecognitionWinUI": {
       "commandName": "Project"
     }
   }

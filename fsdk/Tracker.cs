@@ -97,34 +97,17 @@ namespace Luxand
         }
 
         /// <summary>
-        /// Gets the eye coordinates for a tracked face.
-        /// </summary>
-        public FSDK.TPoint[] GetEyes(long cameraIdx, long id)
-        {
-            FSDK.CheckForError(FSDK.GetTrackerEyes(handle, cameraIdx, id, out var features));
-            return features;
-        }
-
-        /// <summary>
         /// Gets the facial features for a tracked face.
         /// </summary>
-        public FSDK.TPoint[] GetFacialFeatures(long cameraIdx, long id)
+        public FSDK.TPointF[] GetFacialFeatures(long cameraIdx, long id)
         {
             FSDK.CheckForError(FSDK.GetTrackerFacialFeatures(handle, cameraIdx, id, out var features));
             return features;
         }
 
         /// <summary>
-        /// Gets the face position for a tracked face.
-        /// </summary>
-        public FSDK.TFacePosition GetFacePosition(long cameraIdx, long id)
-        {
-            FSDK.CheckForError(FSDK.GetTrackerFacePosition(handle, cameraIdx, id, out var pos));
-            return pos;
-        }
-
-        /// <summary>
-        /// Gets the full face structure for a tracked face.
+        /// Gets the position of a tracked face. Replaces <c>GetFacePosition</c>, which returned the
+        /// <c>TFacePosition</c> structure FaceSDK 9.0 removed.
         /// </summary>
         public FSDK.TFace GetFace(long cameraIdx, long id)
         {
@@ -191,9 +174,23 @@ namespace Luxand
         /// <summary>
         /// Gets a list of similar IDs for a tracked face.
         /// </summary>
+        /// <param name="id">The tracked face ID.</param>
+        /// <param name="maxSize">Upper bound, in bytes, on the list the tracker may write.</param>
         public long[] GetSimilarIDList(long id, long maxSize = 1024)
         {
             FSDK.CheckForError(FSDK.GetSimilarIDList(handle, id, out var list, maxSize));
+            return Trim(list, GetSimilarIDCount(id));
+        }
+
+        /// <summary>
+        /// Shortens a list the tracker filled only partially down to the number of entries it actually wrote.
+        /// </summary>
+        private static long[] Trim(long[] list, long count)
+        {
+            if (count < 0)
+                count = 0;
+            if (count < list.Length)
+                Array.Resize(ref list, (int)count);
             return list;
         }
 
@@ -265,10 +262,11 @@ namespace Luxand
         /// <summary>
         /// Gets all IDs in the tracker.
         /// </summary>
+        /// <param name="maxSizeInBytes">Upper bound, in bytes, on the list the tracker may write.</param>
         public long[] GetAllIDs(long maxSizeInBytes = 1024)
         {
             FSDK.CheckForError(FSDK.GetTrackerAllIDs(handle, out var idList, maxSizeInBytes));
-            return idList;
+            return Trim(idList, GetIDsCount());
         }
 
         /// <summary>
@@ -284,10 +282,12 @@ namespace Luxand
         /// <summary>
         /// Gets all face IDs for a given ID.
         /// </summary>
+        /// <param name="id">The tracker ID identifying a person.</param>
+        /// <param name="maxSizeInBytes">Upper bound, in bytes, on the list the tracker may write.</param>
         public long[] GetFaceIDsForID(long id, long maxSizeInBytes = 1024)
         {
             FSDK.CheckForError(FSDK.GetTrackerFaceIDsForID(handle, id, out var faceIdList, maxSizeInBytes));
-            return faceIdList;
+            return Trim(faceIdList, GetFaceIDsCountForID(id));
         }
 
         /// <summary>

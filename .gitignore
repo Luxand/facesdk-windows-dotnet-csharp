@@ -1,0 +1,7 @@
+bin/
+obj/
+.vs/
+*.user
+
+# tracker memory created by the samples
+tracker*.dat
