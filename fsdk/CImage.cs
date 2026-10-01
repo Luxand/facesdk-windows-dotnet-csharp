@@ -149,148 +149,48 @@ namespace Luxand
         }
 
         /// <summary>
-        /// Detects a face in the image.
+        /// Detects the most prominent face in the image.
         /// </summary>
-        /// <returns>A TFacePosition structure representing the detected face.</returns>
-        public FSDK.TFacePosition DetectFace()
+        /// <returns>A <see cref="FSDK.TFace"/> structure describing the detected face.</returns>
+        public FSDK.TFace DetectFace()
         {
-            int res = FSDK.DetectFace(hImage, out FSDK.TFacePosition fp);
-
-            if (FSDK.FSDKE_FACE_NOT_FOUND == res)
-            {
-                fp = new FSDK.TFacePosition
-                {
-                    xc = 0,
-                    yc = 0,
-                    angle = 0,
-                    w = 0
-                };
-            }
-            else
-            {
-                FSDK.CheckForError(res);
-            }
-
-            return fp;
-        }
-
-        /// <summary>
-        /// Detects a face in the image and returns more detailed information.
-        /// </summary>
-        /// <returns>A TFace structure representing the detected face.</returns>
-        public FSDK.TFace DetectFace2()
-        {
-            int res = FSDK.DetectFace2(hImage, out FSDK.TFace face);
-
-            if (FSDK.FSDKE_FACE_NOT_FOUND == res)
-            {
-                face = new FSDK.TFace
-                {
-                    bbox = new FSDK.TFace.BBox
-                    {
-                        p0 = new FSDK.TPoint
-                        {
-                            x = 0,
-                            y = 0
-                        },
-
-                        p1 = new FSDK.TPoint
-                        {
-                            x = 0,
-                            y = 0
-                        }
-                    }
-                };
-            }
-            else
-            {
-                FSDK.CheckForError(res);
-            }
-
+            FSDK.CheckForError(FSDK.DetectFace(hImage, out FSDK.TFace face));
             return face;
         }
 
         /// <summary>
-        /// Tries to detect a face in the image.
+        /// Detects multiple faces in the image, sorted by detection score in descending order.
         /// </summary>
-        /// <param name="face">The detected face.</param>
-        /// <returns>true if a face was detected; otherwise, false.</returns>
-        public bool TryDetectFace2(out FSDK.TFace face)
+        /// <param name="maxCount">The maximum number of faces to detect.</param>
+        /// <returns>An array of <see cref="FSDK.TFace"/> structures describing the detected faces. Empty if no face was found.</returns>
+        public FSDK.TFace[] DetectMultipleFaces(int maxCount = 256)
         {
-            return FSDK.DetectFace2(hImage, out face) == FSDK.FSDKE_OK;
-        }
-
-        /// <summary>
-        /// Detects multiple faces in the image.
-        /// </summary>
-        /// <param name="maxSize">The maximum number of faces to detect.</param>
-        /// <returns>An array of TFacePosition structures representing the detected faces.</returns>
-        public FSDK.TFacePosition[] DetectMultipleFaces(int maxSize = 256)
-        {
-            var res = FSDK.DetectMultipleFaces(hImage, out int detected, out FSDK.TFacePosition[] FaceArray, FSDK.sizeofTFacePosition * maxSize);
+            var res = FSDK.DetectMultipleFaces(hImage, out FSDK.TFace[] FaceArray, maxCount);
 
             if (FSDK.FSDKE_FACE_NOT_FOUND != res)
-                return FaceArray;
+                FSDK.CheckForError(res);
 
-            FSDK.CheckForError(res);
             return FaceArray;
-        }
-
-        /// <summary>
-        /// Detects multiple faces in the image and returns more detailed information.
-        /// </summary>
-        /// <param name="maxSize">The maximum number of faces to detect.</param>
-        /// <returns>An array of TFace structures representing the detected faces.</returns>
-        public FSDK.TFace[] DetectMultipleFaces2(int maxSize = 256)
-        {
-            var res = FSDK.DetectMultipleFaces2(hImage, out int detectedCount, out FSDK.TFace[] FaceArray, maxSize);
-
-            if (FSDK.FSDKE_FACE_NOT_FOUND != res)
-                return FaceArray;
-
-            FSDK.CheckForError(res);
-            return FaceArray;
-        }
-
-        /// <summary>
-        /// Detects eyes in the image.
-        /// </summary>
-        /// <returns>An array of TPoint structures representing the detected eyes.</returns>
-        public FSDK.TPoint[] DetectEyes()
-        {
-            FSDK.CheckForError(FSDK.DetectEyes(hImage, out FSDK.TPoint[] feats));
-            return feats;
-        }
-
-        /// <summary>
-        /// Detects eyes in the image within a specified region.
-        /// </summary>
-        /// <param name="FacePosition">The region of interest.</param>
-        /// <returns>An array of TPoint structures representing the detected eyes.</returns>
-        public FSDK.TPoint[] DetectEyesInRegion(FSDK.TFacePosition FacePosition)
-        {
-            FSDK.CheckForError(FSDK.DetectEyesInRegion(hImage, FacePosition, out FSDK.TPoint[] feats));
-            return feats;
         }
 
         /// <summary>
         /// Detects facial features in the image.
         /// </summary>
-        /// <returns>An array of TPoint structures representing the detected facial features.</returns>
-        public FSDK.TPoint[] DetectFacialFeatures()
+        /// <returns>An array of TPointF structures representing the detected facial features.</returns>
+        public FSDK.TPointF[] DetectFacialFeatures()
         {
-            FSDK.CheckForError(FSDK.DetectFacialFeatures(hImage, out FSDK.TPoint[] feats));
+            FSDK.CheckForError(FSDK.DetectFacialFeatures(hImage, out FSDK.TPointF[] feats));
             return feats;
         }
 
         /// <summary>
-        /// Detects facial features in the image within a specified region.
+        /// Detects facial features in the image within a previously detected face.
         /// </summary>
-        /// <param name="FacePosition">The region of interest.</param>
-        /// <returns>An array of TPoint structures representing the detected facial features.</returns>
-        public FSDK.TPoint[] DetectFacialFeaturesInRegion(in FSDK.TFacePosition FacePosition)
+        /// <param name="Face">The face to look inside.</param>
+        /// <returns>An array of TPointF structures representing the detected facial features.</returns>
+        public FSDK.TPointF[] DetectFacialFeaturesInRegion(in FSDK.TFace Face)
         {
-            FSDK.CheckForError(FSDK.DetectFacialFeaturesInRegion(hImage, FacePosition, out FSDK.TPoint[] feats));
+            FSDK.CheckForError(FSDK.DetectFacialFeaturesInRegion(hImage, Face, out FSDK.TPointF[] feats));
             return feats;
         }
 
@@ -298,9 +198,21 @@ namespace Luxand
         /// Detects facial attributes using the detected facial features.
         /// </summary>
         /// <returns> Facial attribute as a string. </returns>
-        public string DetectFacialAttributeUsingFeatures(FSDK.TPoint[] FacialFeatures, string AttributeName)
+        public string DetectFacialAttributeUsingFeatures(FSDK.TPointF[] FacialFeatures, string AttributeName)
         {
             FSDK.CheckForError(FSDK.DetectFacialAttributeUsingFeatures(hImage, FacialFeatures, AttributeName, out string attr, 1024));
+            return attr;
+        }
+
+        /// <summary>
+        /// Detects facial attributes for a previously detected face, without detecting the facial features first.
+        /// </summary>
+        /// <param name="Face">The face to describe.</param>
+        /// <param name="AttributeName">The name of the attribute, for example "Gender" or "Expression".</param>
+        /// <returns> Facial attribute as a string. </returns>
+        public string DetectFacialAttributeUsingFace(in FSDK.TFace Face, string AttributeName)
+        {
+            FSDK.CheckForError(FSDK.DetectFacialAttributeUsingFace(hImage, Face, AttributeName, out string attr));
             return attr;
         }
 
@@ -444,45 +356,13 @@ namespace Luxand
         }
 
         /// <summary>
-        /// Extracts the face template from the image (alternative method).
+        /// Extracts the face template for a previously detected face.
         /// </summary>
+        /// <param name="Face">The face to extract the template for.</param>
         /// <returns>The face template bytes.</returns>
-        public byte[] GetFaceTemplate2()
+        public byte[] GetFaceTemplateInRegion(in FSDK.TFace Face)
         {
-            FSDK.CheckForError(FSDK.GetFaceTemplate2(hImage, out byte[] tmpl));
-            return tmpl;
-        }
-
-        /// <summary>
-        /// Extracts the face template from a specified region of the image.
-        /// </summary>
-        /// <param name="FacePosition">The region of interest.</param>
-        /// <returns>The face template bytes.</returns>
-        public byte[] GetFaceTemplateInRegion(in FSDK.TFacePosition FacePosition)
-        {
-            FSDK.CheckForError(FSDK.GetFaceTemplateInRegion(hImage, FacePosition, out byte[] tmpl));
-            return tmpl;
-        }
-
-        /// <summary>
-        /// Extracts the face template from a specified region of the image (alternative method).
-        /// </summary>
-        /// <param name="Face">The face structure containing the region of interest.</param>
-        /// <returns>The face template bytes.</returns>
-        public byte[] GetFaceTemplateInRegion2(in FSDK.TFace Face)
-        {
-            FSDK.CheckForError(FSDK.GetFaceTemplateInRegion2(hImage, Face, out byte[] tmpl));
-            return tmpl;
-        }
-
-        /// <summary>
-        /// Extracts the face template using the coordinates of the eyes.
-        /// </summary>
-        /// <param name="EyeCoords">The coordinates of the eyes.</param>
-        /// <returns>The face template bytes.</returns>
-        public byte[] GetFaceTemplateUsingEyes(FSDK.TPoint[] EyeCoords)
-        {
-            FSDK.CheckForError(FSDK.GetFaceTemplateUsingEyes(hImage, EyeCoords, out byte[] tmpl));
+            FSDK.CheckForError(FSDK.GetFaceTemplateInRegion(hImage, Face, out byte[] tmpl));
             return tmpl;
         }
 
@@ -540,6 +420,43 @@ namespace Luxand
         public static CImage LoadImageFromBuffer(byte[] Buffer, int Width, int Height, int ScanLine, FSDK.FSDK_IMAGEMODE ImageMode)
         {
             FSDK.CheckForError(FSDK.LoadImageFromBuffer(out int hImageBuffer, Buffer, Width, Height, ScanLine, ImageMode));
+            return new CImage(hImageBuffer);
+        }
+
+        /// <summary>
+        /// Loads an image from a file, preserving its alpha channel. The image is loaded in 32-bit color mode.
+        /// </summary>
+        /// <param name="FileName">The name of the file to load.</param>
+        /// <returns>A new <see cref="CImage"/> instance containing the loaded image.</returns>
+        public static CImage LoadImageFromFileWithAlpha(string FileName)
+        {
+            FSDK.CheckForError(FSDK.LoadImageFromFileWithAlpha(out int hImageBuffer, FileName));
+            return new CImage(hImageBuffer);
+        }
+
+        /// <summary>
+        /// Loads an image from a buffer holding an encoded JPEG file.
+        /// </summary>
+        /// <param name="Buffer">The bytes of the JPEG file.</param>
+        /// <returns>A new <see cref="CImage"/> instance containing the loaded image.</returns>
+        public static CImage LoadImageFromJpegBuffer(byte[] Buffer)
+        {
+            FSDK.CheckForError(FSDK.LoadImageFromJpegBuffer(out int hImageBuffer, Buffer));
+            return new CImage(hImageBuffer);
+        }
+
+        /// <summary>
+        /// Loads an image from a buffer holding an encoded PNG file.
+        /// </summary>
+        /// <param name="Buffer">The bytes of the PNG file.</param>
+        /// <param name="WithAlpha">True to preserve the alpha channel of the PNG, false to discard it.</param>
+        /// <returns>A new <see cref="CImage"/> instance containing the loaded image.</returns>
+        public static CImage LoadImageFromPngBuffer(byte[] Buffer, bool WithAlpha = false)
+        {
+            int hImageBuffer;
+            FSDK.CheckForError(WithAlpha
+                ? FSDK.LoadImageFromPngBufferWithAlpha(out hImageBuffer, Buffer)
+                : FSDK.LoadImageFromPngBuffer(out hImageBuffer, Buffer));
             return new CImage(hImageBuffer);
         }
     }

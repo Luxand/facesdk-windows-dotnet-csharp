@@ -20,7 +20,7 @@ namespace LiveRecognition
         bool needClose = false;
 
         Luxand.Tracker tracker = null;
-        String TrackerMemoryFile = "tracker70.dat";
+        String TrackerMemoryFile = "tracker90.dat";
 
         // Mouse coordinates in the pictureBox1 coordinate system
         int mouseX = 0;
@@ -39,6 +39,8 @@ namespace LiveRecognition
 
         // If the FaceSDK library is activated
         static bool isActivated = false;
+        // Prefix of the liveness caption: "iBeta Liveness" once the iBeta plugin is initialized, otherwise the built-in "Liveness"
+        string livenessLabel = "Liveness";
 
         // Store the current frame for drawing
         private Image currentFrame = null;
@@ -56,9 +58,9 @@ namespace LiveRecognition
 
         private void MainForm_Load(object sender, EventArgs e)
         {
-            if (!isActivated && FSDK.FSDKE_OK != FSDK.ActivateLibrary("Insert the License Key here"))
+            if (!isActivated && FSDK.FSDKE_OK != FSDK.ActivateLibrary("INSERT THE LICENSE KEY HERE"))
             {
-                MessageBox.Show("Please run the License Key Wizard (Start - Luxand - FaceSDK - License Key Wizard)", "Error activating FaceSDK", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Please insert the license key in the FSDK.ActivateLibrary()", "Error activating FaceSDK", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Application.Exit();
             }
             isActivated = true;
@@ -92,8 +94,6 @@ namespace LiveRecognition
             }
 
             Luxand.Camera.SetVideoFormat(cameraName, formatList[formatIndex]);
-
-            // Do not change the size of pictureBox1 and the form, let the user control the window size
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -114,6 +114,7 @@ namespace LiveRecognition
 
                 if (openFileDialog.ShowDialog() != DialogResult.OK)
                     return;
+
                 //Get the path of specified file
                 filePath = openFileDialog.FileName;
             }
@@ -129,8 +130,12 @@ namespace LiveRecognition
                 return;
             }
 
-            FSDK.TFace face = image.DetectFace2();
-            if (face.empty())
+            FSDK.TFace face;
+            try
+            {
+                face = image.DetectFace();
+            }
+            catch
             {
                 // No faces found in the image
                 MessageBox.Show("No faces found", "The image does not contain any detectable faces.");
@@ -140,7 +145,7 @@ namespace LiveRecognition
             byte[] faceTemplate = new byte[FSDK.TemplateSize];
             try
             {
-                faceTemplate = image.GetFaceTemplateInRegion2(face);
+                faceTemplate = image.GetFaceTemplateInRegion(face);
             }
             catch (Exception ex)
             {
@@ -232,14 +237,25 @@ namespace LiveRecognition
             }
 
             // set realtime face detection parameters
-            tracker.SetParameter("DetectionVersion", "2");
-            tracker.SetMultipleParameters("FaceDetection2PatchSize=256; Threshold=0.8; Threshold2=0.9; SmoothAttributeLiveness=false; LivenessFramesCount=1; DetectLiveness=true", out var errorPosition);
+            tracker.SetMultipleParameters("FaceDetectionPatchSize=128; FaceDetectionThreshold=0.4;", out var errorPosition);
+
+            tracker.SetParameter("DetectLiveness", "true");
+            tracker.SetParameter("LivenessFramesCount", "1");
+            tracker.SetParameter("SmoothAttributeLiveness", "false");
 
             // Initialize iBeta liveness addon
-            FSDK.SetParameter("LivenessModel", "external:dataDir=" + AppContext.BaseDirectory);
+            int livenessModelResult = FSDK.SetParameter("LivenessModel", "external:dataDir=" + AppContext.BaseDirectory);
+            livenessLabel = livenessModelResult == FSDK.FSDKE_OK ? "iBeta Liveness" : "Liveness";
+            if (livenessModelResult != FSDK.FSDKE_OK)
+            {
+                string reason = livenessModelResult == FSDK.FSDKE_PLUGIN_NO_PERMISSION
+                    ? "The license key does not permit the iBeta liveness plugin."
+                    : "Check that the iBeta license is installed (INSTALL_LICENSE) and the plugin binaries and data are next to the application.";
+                MessageBox.Show($"Error initializing iBeta liveness plugin ({livenessModelResult}).\n{reason}\nThe built-in liveness will be used instead.",
+                    "iBeta liveness error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
 
             this.CheckFaceBtn.Enabled = true;
-
 
             while (!needClose)
             {
@@ -260,11 +276,21 @@ namespace LiveRecognition
 
                 if (faceIds != null)
                 {
-                    Graphics gr = Graphics.FromImage(frameImage);
+                    // Everything is drawn onto the full-resolution frame, which is then scaled
+                    // down to fit pictureBox1, so the outline and the label are sized against
+                    // the frame rather than in fixed pixels.
+                    float strokeWidth = Math.Max(2.0f, frameImage.Height * 0.004f);
+                    float fontSize = Math.Max(10.0f, frameImage.Height * 0.03f);
 
+                    Graphics gr = Graphics.FromImage(frameImage);
+                    gr.SmoothingMode = SmoothingMode.AntiAlias;
+
+                    using (gr)
+                    using (var labelFont = new System.Drawing.Font("Arial", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
+                    using (var format = new StringFormat { Alignment = StringAlignment.Center })
                     foreach (var faceId in faceIds)
                     {
-                        // Get the face position and create an ellipse for it
+                        // Get the face and create an ellipse for it
                         FSDK.TFace face;
                         try { face = tracker.GetFace(0, faceId); } catch { continue; }
 
@@ -272,8 +298,13 @@ namespace LiveRecognition
                         string facename = "";
                         try { facename = tracker.GetName(faceId); } catch { }
 
-                        float w = face.width();
-                        float h = face.height();
+                        float w = face.width;
+                        float h = face.height;
+
+                        int left = face.left;
+                        int top = face.top;
+                        int right = face.right;
+                        int bottom = face.bottom;
 
                         // Get liveness
                         float liveness = 0.0f;
@@ -293,13 +324,13 @@ namespace LiveRecognition
                         }
                         catch { }
 
-                        Pen pen = Pens.LightGreen;
+                        Color penColor = Color.LightGreen;
 
                         if (livenessError != "")
                         {
                             // If there is an error, we cannot determine liveness
-                            pen = Pens.Yellow;
-                            livenessText = $"Liveness: {livenessError}";
+                            penColor = Color.Yellow;
+                            livenessText = $"{livenessLabel}: {livenessError}";
                         }
                         else
                         {
@@ -308,11 +339,11 @@ namespace LiveRecognition
                                 if (liveness < 0.5f)
                                 {
                                     // If liveness is low, mark the face as suspicious
-                                    pen = Pens.Red;
+                                    penColor = Color.Red;
                                 }
                                 else
                                 {
-                                    livenessText = $"Liveness: {liveness * 100.0f:0.00}%";
+                                    livenessText = $"{livenessLabel}: {liveness * 100.0f:0.00}%";
                                 }
                             }
                         }
@@ -329,25 +360,23 @@ namespace LiveRecognition
                         UpdateMouseImageCoords();
 
                         if (mouseImgX >= 0 && mouseImgY >= 0 &&
-                            mouseImgX >= face.left() && mouseImgX <= face.right() &&
-                            mouseImgY >= face.top() && mouseImgY <= face.bottom())
+                            mouseImgX >= left && mouseImgX <= right &&
+                            mouseImgY >= top && mouseImgY <= bottom)
                         {
                             // Highlight the face if the mouse is over it
-                            pen = Pens.Blue;
+                            penColor = Color.Blue;
                             selectedFaceId = (int)faceId;
                         }
 
-                        gr.DrawEllipse(pen, face.left(), face.top(), w, h);
+                        using (var pen = new Pen(penColor, strokeWidth))
+                            gr.DrawEllipse(pen, left, top, w, h);
 
                         // Draw name
                         if (labelText != "")
                         {
-                            StringFormat format = new StringFormat();
-                            format.Alignment = StringAlignment.Center;
-
-                            gr.DrawString(labelText, new System.Drawing.Font("Arial", 12, FontStyle.Bold),
-                                new System.Drawing.SolidBrush(pen.Color),
-                                face.center().x, face.bottom(), format);
+                            using (var brush = new SolidBrush(penColor))
+                                gr.DrawString(labelText, labelFont, brush,
+                                    face.center.x, bottom, format);
                         }
                     }
                 }
@@ -416,7 +445,7 @@ namespace LiveRecognition
                 selectedFaceId = -1; // Reset selected face ID
             }
         }
-
+        
         private void pictureBox1_MouseMove(object sender, MouseEventArgs e)
         {
             mouseX = e.X;

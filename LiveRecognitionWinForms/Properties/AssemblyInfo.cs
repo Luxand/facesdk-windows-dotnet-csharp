@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Luxand, Inc.")]
 [assembly: AssemblyProduct("LiveRecognition")]
-[assembly: AssemblyCopyright("Copyright © 2005-2010 Luxand, Inc.")]
+[assembly: AssemblyCopyright("Copyright © 2005-2025 Luxand, Inc.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
