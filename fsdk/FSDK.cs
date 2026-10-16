@@ -171,7 +171,7 @@ namespace Luxand
             public float score;
 
             /// <summary>
-            /// In-plane rotation angle of the face, in degrees.
+            /// In-plane rotation angle of the face, in radians.
             /// </summary>
             public float angle;
 
@@ -1033,6 +1033,31 @@ namespace Luxand
 
         [DllImport(Dll, EntryPoint = "FSDK_DeleteTrackerFaceImage", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         public static extern int DeleteTrackerFaceImage(int Tracker, long FaceID);
+
+        [DllImport(Dll, EntryPoint = "FSDK_GetTrackerFaceFeatures", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int FSDK_GetTrackerFaceFeaturesInternal(int Tracker, long FaceID, [Out] TPoint[] Features);
+
+        /// <summary>
+        /// Gets the 5 facial feature points of the face image stored in the tracker for FaceID, in the coordinates of that image.
+        /// </summary>
+        public static int GetTrackerFaceFeatures(int Tracker, long FaceID, out TPoint[] Features)
+        {
+            Features = new TPoint[FSDK_FACE_FEATURE_COUNT];
+            return FSDK_GetTrackerFaceFeaturesInternal(Tracker, FaceID, Features);
+        }
+
+        [DllImport(Dll, EntryPoint = "FSDK_SetTrackerFaceFeatures", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int FSDK_SetTrackerFaceFeaturesInternal(int Tracker, long FaceID, [In] TPoint[] Features);
+
+        /// <summary>
+        /// Replaces the 5 facial feature points of the face image stored in the tracker for FaceID.
+        /// </summary>
+        public static int SetTrackerFaceFeatures(int Tracker, long FaceID, TPoint[] Features)
+        {
+            if (Features == null || Features.Length != FSDK_FACE_FEATURE_COUNT)
+                return FSDKE_INVALID_ARGUMENT;
+            return FSDK_SetTrackerFaceFeaturesInternal(Tracker, FaceID, Features);
+        }
 
         [DllImport(Dll, EntryPoint = "FSDK_TrackerMatchFaces", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         public static extern int FSDK_TrackerMatchFacesInternal(int Tracker, [In, MarshalAs(UnmanagedType.LPArray)] byte[] FaceTemplate, float Threshold, [Out, MarshalAs(UnmanagedType.LPArray)] IDSimilarity[] Buffer, out long Count, long MaxSizeInBytes);

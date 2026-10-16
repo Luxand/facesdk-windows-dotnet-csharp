@@ -371,6 +371,25 @@ namespace Luxand
         }
 
         /// <summary>
+        /// Gets the 5 facial feature points of the stored face image, in the coordinates of that image.
+        /// </summary>
+        public FSDK.TPoint[] GetFaceFeatures(long faceId)
+        {
+            FSDK.CheckForError(FSDK.GetTrackerFaceFeatures(handle, faceId, out var features));
+            return features;
+        }
+
+        /// <summary>
+        /// Replaces the 5 facial feature points of the stored face image.
+        /// </summary>
+        public int SetFaceFeatures(long faceId, FSDK.TPoint[] features)
+        {
+            var res = FSDK.SetTrackerFaceFeatures(handle, faceId, features);
+            FSDK.CheckForError(res);
+            return res;
+        }
+
+        /// <summary>
         /// Matches a face template against faces in the tracker.
         /// </summary>
         public FSDK.IDSimilarity[] MatchFaces(byte[] faceTemplate, float threshold, long maxSizeInBytes = 1024)
