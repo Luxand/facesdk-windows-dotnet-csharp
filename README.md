@@ -21,7 +21,7 @@ The iBeta certified Liveness add-on for FaceSDK aced Level 1 Presentation Attack
 
 ## Samples
 
-Live face recognition with liveness detection from a webcam, using Luxand FaceSDK 9.0 and the [iBeta Certified Liveness Addon](https://www.luxand.com/facesdk/documentation/certifiedliveness.php):
+Live face recognition with liveness detection from a webcam, using Luxand FaceSDK 9.0.1 and the [iBeta Certified Liveness Addon](https://www.luxand.com/facesdk/documentation/certifiedliveness.php):
 
 - `LiveRecognitionWinForms` &mdash; Windows Forms application (.NET Framework 4.8), solution `LiveRecognitionWinForms/LiveRecognition_VS2010+.sln`
 - `LiveRecognitionWinUI` &mdash; WinUI 3 application (.NET 8, Windows App SDK), solution `LiveRecognitionWinUI/LiveRecognitionWinUI.sln`
@@ -45,7 +45,7 @@ FaceSDK 9.0 uses new neural network models for face detection and recognition. T
 public struct TFace
 {
     public float score;      // detection confidence, 0..1
-    public float angle;      // in-plane rotation angle, degrees
+    public float angle;      // in-plane rotation angle, radians
     public BBox bbox;        // bbox.p0 - top left, bbox.p1 - bottom right corner
     public TPoint[] features; // 5 points: eye centers, nose tip, mouth corners
 
